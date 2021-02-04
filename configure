@@ -1875,7 +1875,7 @@ else
 fi
 
 case $_host in
-arm-*riscos | caanoo | gp2x | gp2xwiz | openpandora | psp | psp2 | switch)
+arm-*riscos | caanoo | ds | gp2x | gp2xwiz | openpandora | psp | psp2 | switch)
 	if test "$_debug_build" = auto; then
 		# If you want to debug one of these platforms, use '--disable-optimizations --enable-debug'
 		_debug_build=no
@@ -2638,7 +2638,7 @@ case $_host_cpu in
 			openpandora)
 				define_in_config_if_yes yes 'USE_ARM_NEON_ASPECT_CORRECTOR'
 				;;
-			androidsdl-armeabi | arm-*riscos | caanoo | ds | gp2x | gp2xwiz | maemo )
+			androidsdl-armeabi | arm-*riscos | caanoo | gp2x | gp2xwiz | maemo )
 				define_in_config_if_yes yes 'USE_ARM_SCALER_ASM'
 				# FIXME: The following feature exhibits a bug. It produces distorted
 				# sound since 9003ce517ff9906b0288f9f7c02197fd091d4554. The ARM
@@ -2985,6 +2985,7 @@ EOF
 		append_var DEFINES "-DNONSTANDARD_PORT"
 		;;
 	ds)
+		_optimization_level=-Os
 		append_var DEFINES "-D__DS__"
 		append_var DEFINES "-DNDS"
 		append_var DEFINES "-DARM9"
@@ -2993,28 +2994,26 @@ EOF
 		append_var CXXFLAGS "-isystem $DEVKITPRO/libnds/include"
 		append_var CXXFLAGS "-isystem $DEVKITPRO/portlibs/nds/include"
 		append_var CXXFLAGS "-isystem $DEVKITPRO/portlibs/armv5te/include"
-		append_var CXXFLAGS "-mcpu=arm9tdmi"
-		append_var CXXFLAGS "-mtune=arm9tdmi"
+		append_var CXXFLAGS "-march=armv5te"
+		append_var CXXFLAGS "-mtune=arm946e-s"
 		append_var CXXFLAGS "-fomit-frame-pointer"
+		append_var CXXFLAGS "-mthumb"
 		append_var CXXFLAGS "-mthumb-interwork"
 		append_var CXXFLAGS "-ffunction-sections"
 		append_var CXXFLAGS "-fdata-sections"
 		append_var CXXFLAGS "-fno-strict-aliasing"
 		append_var CXXFLAGS "-fuse-cxa-atexit"
+		append_var LDFLAGS "-mthumb"
 		append_var LDFLAGS "-mthumb-interwork"
 		append_var LDFLAGS "-mfloat-abi=soft"
 		append_var LDFLAGS "-Wl,-Map,map.txt"
-		if test "$_dynamic_modules" = no ; then
-			append_var LDFLAGS "-Wl,--gc-sections"
-		else
-			append_var LDFLAGS "-Wl,--no-gc-sections"
-			# TODO automate this required 2 step linking phase
-			# append_var LDFLAGS "-Wl,--retain-symbols-file,ds.syms"
-		fi
 		append_var LDFLAGS "-L$DEVKITPRO/libnds/lib"
 		append_var LDFLAGS "-L$DEVKITPRO/portlibs/nds/lib"
 		append_var LDFLAGS "-L$DEVKITPRO/portlibs/armv5te/lib"
 		append_var LIBS "-specs=ds_arm9.specs"
+		append_var LIBS "-lfilesystem"
+		append_var LIBS "-lfat"
+		append_var LIBS "-lmm9"
 		append_var LIBS "-lnds9"
 		;;
 	freebsd* | openbsd*)
@@ -3400,13 +3399,20 @@ if test -n "$_host"; then
 			_port_mk="backends/platform/dc/dreamcast.mk"
 			;;
 		ds)
+			if test "$_dynamic_modules" = yes ; then
+				_detection_features_static=no
+				_plugins_default=dynamic
+			else
+				_detection_features_full=no
+			fi
+			if test "$_debug_build" != yes; then
+				append_var DEFINES "-DDISABLE_TEXT_CONSOLE"
+			fi
 			append_var DEFINES "-DDISABLE_COMMAND_LINE"
-			append_var DEFINES "-DDISABLE_DEFAULT_SAVEFILEMANAGER"
 			append_var DEFINES "-DDISABLE_DOSBOX_OPL"
 			append_var DEFINES "-DDISABLE_FANCY_THEMES"
 			append_var DEFINES "-DDISABLE_SID"
 			append_var DEFINES "-DDISABLE_NES_APU"
-			append_var DEFINES "-DDISABLE_TEXT_CONSOLE"
 			append_var DEFINES "-DREDUCE_MEMORY_USAGE"
 			append_var DEFINES "-DSTREAM_AUDIO_FROM_DISK"
 			append_var DEFINES "-DVECTOR_RENDERER_FORMAT=1555"
@@ -3417,6 +3423,8 @@ if test -n "$_host"; then
 			_tinygl=no
 			_bink=no
 			_lua=no
+			_png=no
+			_freetype2=no
 			_port_mk="backends/platform/ds/ds.mk"
 			;;
 		gamecube)
@@ -3707,9 +3715,7 @@ case $_backend in
 		_sdl=auto
 		;;
 	ds)
-		append_var INCLUDES '-I$(srcdir)/backends/platform/ds/arm9/source'
-		append_var INCLUDES '-I$(srcdir)/backends/platform/ds/commoninclude'
-		append_var INCLUDES '-Ibackends/platform/ds/arm9/data'
+		append_var INCLUDES '-I$(srcdir)/backends/platform/ds'
 		;;
 	gph)
 		# On the GPH devices we want fancy themes but do not want the load/save thumbnail grid.
@@ -3946,7 +3952,7 @@ fi
 # Enable 16bit support only for backends which support it
 #
 case $_backend in
-	3ds | android | android3d | androidsdl | dingux | dc | gph | iphone | ios7 | maemo | null | openpandora | psp | psp2 | samsungtv | sdl | switch | wii)
+	3ds | android | android3d | androidsdl | dingux | dc | ds | gph | iphone | ios7 | maemo | null | openpandora | psp | psp2 | samsungtv | sdl | switch | wii)
 		if test "$_16bit" = auto ; then
 			_16bit=yes
 		else
@@ -4161,7 +4167,7 @@ POST_OBJS_FLAGS		:= -Wl,--no-whole-archive
 		append_var DEFINES "-DUNCACHED_PLUGINS"
 		append_var DEFINES "-DELF_NO_MEM_MANAGER"
 _mak_plugins='
-PLUGIN_LDFLAGS		+= -Wl,-T$(srcdir)/backends/plugins/ds/plugin.ld -mthumb-interwork -mfloat-abi=soft
+PLUGIN_LDFLAGS		+= -Wl,-T$(srcdir)/backends/plugins/ds/plugin.ld -mthumb -mthumb-interwork -mfloat-abi=soft
 '
 		;;
 	freebsd* | openbsd*)
@@ -5871,7 +5877,7 @@ test "x$prefix" = xNONE && prefix=/usr/local
 test "x$exec_prefix" = xNONE && exec_prefix='${prefix}'
 
 case $_host_os in
-	mingw*)
+	ds | mingw*)
 		# Windows stores all the external data files in executable file.
 		;;
 	*)
@@ -5882,6 +5888,8 @@ esac
 case $_backend in
 	3ds)
 		append_var DEFINES "-DPLUGIN_DIRECTORY=\\\"$datadir/plugins\\\""
+		;;
+	ds)
 		;;
 	openpandora)
 		# Add ../plugins as a path so plugins can be found when running from a .PND.
@@ -6043,6 +6051,16 @@ case $_host_os in
 		# all toolchain symbols in *our* libraries rather
 		# than pick up anything unhygenic from the Android libs.
 		LIBS="-Wl,-Bstatic $static_libs -Wl,-Bdynamic -lgcc $system_libs -llog -landroid -lGLESv1_CM"
+		;;
+	ds)
+		# Moved -Wl,--gc-sections here to avoid it interfering with the library checks
+		if test "$_dynamic_modules" = no ; then
+			append_var LDFLAGS "-Wl,--gc-sections"
+		else
+			append_var LDFLAGS "-Wl,--no-gc-sections"
+			# TODO automate this required 2 step linking phase
+			# append_var LDFLAGS "-Wl,--retain-symbols-file,ds.syms"
+		fi
 		;;
 	riscos)
 		append_var CXXFLAGS "-mno-poke-function-name"
